@@ -1,0 +1,100 @@
+
+# AetherSchedule: Building From Scratch with Next.js and Firebase
+
+This document provides a comprehensive, phase-by-phase guide to recreating the AetherSchedule project. Each section contains a series of detailed, text-only prompts intended to be given to an AI developer to generate the required code.
+
+**Tech Stack:**
+*   **Framework:** Next.js (with App Router)
+*   **Language:** TypeScript
+*   **Styling:** Tailwind CSS
+*   **Backend:** Firebase (Authentication, Firestore, and Cloud Functions)
+*   **AI Integration:** Google Gemini API
+
+---
+
+### **Phase 0 & 1: Project Setup & UI Shell**
+
+(These phases cover the initial Next.js setup, folder structure, styling, theme management, and creation of static UI components like the Layout, Sidebar, and Header, as previously defined. Assume this is complete.)
+
+---
+
+### **Phase 2: Firebase Integration & Authentication**
+
+(This phase covers setting up a Firebase project, configuring Auth and Firestore, creating an AuthContext to manage user state, and building the login page and protected routes. Assume this is complete.)
+
+---
+
+### **Phase 3: Foundational Data Management (CRUD)**
+
+(This phase covers building the reusable `DataTable` and form components to manage core data like Subjects, Faculty, and Rooms via a tabbed interface on a dedicated "Data Management" page. Assume this is complete.)
+
+---
+
+### **Phase 4: Core Scheduler Implementation**
+
+**Goal:** Build the main scheduler page UI and the core backend engine that generates timetables using a genetic algorithm.
+
+**Prompt 4.1: Build the Scheduler Page UI**
+> Create the dedicated page at `app/(app)/scheduler/page.tsx`. This page should be composed of several distinct, static components:
+> 1.  **Batch Selector:** A component that allows the user to select which batches (e.g., "CS Semester 3A", "EE Semester 1") to include in the generation process. This will feed the initial data to the backend.
+> 2.  **Timetable Display:** A large, central area that uses the `TimetableView` component (created in an earlier phase) to render the final schedule grid.
+> 3.  **Control Panel:** A `GlassPanel` containing the main action buttons: "Generate Timetable", "Save Draft", and a placeholder for "AI Command".
+> 4.  **Console Panel:** A read-only panel to display logs from the generation process, providing feedback to the user about the AI's progress.
+
+**Prompt 4.2: Implement the Core Scheduler Engine (Firebase Function)**
+> This is the most critical backend task. Create an HTTPS Callable Firebase Function named `generateTimetable`.
+>
+> **Function Logic:**
+> 1.  **Data Fetching:** When called, the function receives an array of `batchIds`. It must then fetch all required data from Firestore: the specified `batches`, all `subjects` and `faculty` associated with them, available `rooms`, and global `constraints`.
+> 2.  **Genetic Algorithm:** Implement a genetic algorithm to find an optimal timetable. The core concepts are:
+>     *   **Individual/Chromosome:** Define a data structure that represents one complete timetable for all selected batches. This is your core "solution" object.
+>     *   **Population:** Create an initial population of 50-100 of these "Individual" timetables, populated randomly.
+>     *   **Fitness Function:** This is the most important part. Write a function that scores a single timetable. It must differentiate between:
+>         *   **Hard Constraints (Deal-breakers):** If a timetable has a faculty member in two places at once, a room used twice, or a lab class in a lecture hall, it is invalid. The fitness function should return `0`.
+>         *   **Soft Constraints (Preferences):** Assign penalty points for undesirable traits, like gaps in a student's schedule, gaps in a faculty's schedule, or classes held in non-ideal rooms. The final score is a sum of these penalties (lower is better).
+>     *   **Evolution Loop:** Run a loop for a set number of generations (e.g., 100). In each generation: perform **Selection** (pick the best timetables), **Crossover** (combine two good timetables to create a new one), and **Mutation** (make a small random change to a timetable to introduce variety).
+> 3.  **Return Value:** After the loop completes, the function should identify the timetable with the best score (lowest penalty) from the final population and return it to the frontend as a JSON object.
+
+**Prompt 4.3: Connect Frontend to the Scheduler Function**
+> In the `app/(app)/scheduler/page.tsx`, wire up the "Generate Timetable" button. When clicked, it should:
+> 1.  Show a loading indicator to the user.
+> 2.  Call the `generateTimetable` Firebase Function, passing the array of `batchIds` from the Batch Selector component.
+> 3.  Log any progress updates from the function to the Console Panel.
+> 4.  When the function returns the final timetable JSON, update the page's state and pass the data to the `TimetableView` component to render the result.
+
+---
+
+### **Phase 5: Advanced AI Features & User Workflows**
+
+**Goal:** Elevate the application from a simple generator to an intelligent assistant by integrating advanced AI capabilities and user collaboration features.
+
+**Prompt 5.1: Implement Manual Editing with Real-time Conflict Checking**
+> **Goal:** Allow users to manually adjust a generated timetable while preventing them from making mistakes.
+> 1.  **Make the UI Interactive:** Update the `TimetableView` component to allow drag-and-drop functionality for class slots.
+> 2.  **Create a `checkConflict` Firebase Function:** This lightweight function receives a proposed change (e.g., "move class X to time slot Y"). It runs *only* the hard constraint checks from the fitness function against this single change.
+> 3.  **Frontend Logic:** When the user drops a class into a new slot, instead of immediately updating the state, first call the `checkConflict` function. If it returns `true` (a conflict exists), show a warning toast and revert the change. If it returns `false`, allow the change to be saved in the local state.
+
+**Prompt 5.2: Integrate AI-Powered Natural Language Commands (Gemini)**
+> **Goal:** Fulfill the "Master Strategist" role of the AI. Allow users to make complex changes using plain English.
+> 1.  **Add an AI Command Bar:** Add a text input field to the scheduler's control panel.
+> 2.  **Create an `applyNaturalLanguageCommand` Firebase Function:** This function takes two arguments: the current `timetable` JSON and a `command` string (e.g., "Move all of Dr. Smith's classes to the afternoon").
+> 3.  **Gemini Integration:** Inside the function, construct a prompt for the Gemini API. Provide it with the full timetable and the user's command, and instruct it to return a modified timetable in the same JSON format. The prompt should explicitly tell the AI it must respect all hard constraints.
+> 4.  **Frontend Logic:** When the user submits a command, call this function. When the modified timetable is returned, display it to the user, perhaps highlighting the changes.
+
+**Prompt 5.3: Implement the Review, Comment, and Approval Workflow**
+> **Goal:** Create a collaborative workflow for different user roles (SuperAdmin, Department Head).
+> 1.  **Data Model:** Add `status` (e.g., 'Draft', 'Submitted', 'Approved') and `comments` (an array of comment objects) fields to your timetable documents in Firestore.
+> 2.  **Update UI based on Role:** On the scheduler page, use the `AuthContext` to get the current user's role.
+>     *   A **SuperAdmin** sees "Submit for Review" and "Approve" buttons.
+>     *   A **Department Head** sees an "Add Comment" button.
+>     *   The UI should be read-only for roles that are not actively reviewing.
+> 3.  **Backend Logic:** Pressing "Submit for Review" changes the status and might trigger notifications. Adding a comment updates the `comments` array in Firestore. "Approve" locks the timetable from further edits.
+
+**Prompt 5.4: Implement AI Self-Tuning via User Feedback (Gemini)**
+> **Goal:** Fulfill the "Self-Tuning Judge" role of the AI, making the system learn from user preferences.
+> 1.  **Gather Feedback:** On the personal "My Timetable" page for faculty, add a simple feedback mechanism (e.g., a "Rate my schedule" 1-5 stars and an optional text comment). Store this feedback in a new `feedback` collection in Firestore.
+> 2.  **Modify the `generateTimetable` Function:** Before the genetic algorithm begins, add a new step:
+>     *   Fetch recent feedback from the `feedback` collection.
+>     *   Make a call to the Gemini API. Provide it with a summary of the feedback (e.g., "75% of faculty complain about having only one class on a day").
+>     *   Ask the AI: "Based on this feedback, should I adjust the penalty weights? For example, should the 'faculty gap' penalty be higher or lower?"
+> 3.  **Apply Dynamic Weights:** Parse the AI's response and use the suggested adjustments to dynamically tune the soft constraint penalties in your fitness function *for that specific run*. This creates a learning loop where the system gets better over time based on user satisfaction.
